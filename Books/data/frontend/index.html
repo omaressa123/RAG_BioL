@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioLens - Biology RAG System</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🧬 BioLens</h1>
+            <p>Advanced Biology RAG System</p>
+        </header>
+        
+        <div class="main-content">
+            <!-- Upload Section -->
+            <div class="card upload-section">
+                <h3>📚 Upload Biology Book</h3>
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="pdfInput" accept=".pdf" style="display: none;">
+                    <div class="upload-content">
+                        <div class="upload-icon">📄</div>
+                        <p>Click to upload or drag and drop</p>
+                        <p class="upload-hint">PDF files only (Max 50MB)</p>
+                    </div>
+                </div>
+                <div class="upload-status" id="uploadStatus"></div>
+            </div>
+            
+            <!-- Query Section -->
+            <div class="card query-section">
+                <h3>🔍 Ask Question</h3>
+                <div class="query-controls">
+                    <input type="text" id="questionInput" placeholder="What would you like to know about biology?" />
+                    <select id="chunkTypeFilter">
+                        <option value="">All Types</option>
+                        <option value="concept">Concepts</option>
+                        <option value="question">Questions</option>
+                        <option value="application">Applications</option>
+                    </select>
+                    <button onclick="askQuestion()" id="askButton">Ask</button>
+                </div>
+                <div class="query-status" id="queryStatus"></div>
+            </div>
+            
+            <!-- Results Section -->
+            <div class="results-grid">
+                <!-- Answer Section -->
+                <div class="card answer-section">
+                    <h3>💡 Answer</h3>
+                    <div class="answer-content" id="answerContent">
+                        <p class="placeholder">Your answers will appear here...</p>
+                    </div>
+                </div>
+                
+                <!-- Sources Section -->
+                <div class="card sources-section">
+                    <h3>📖 Sources</h3>
+                    <div class="sources-content" id="sourcesContent">
+                        <p class="placeholder">Source information will appear here...</p>
+                    </div>
+                </div>
+                
+                <!-- Confidence Section -->
+                <div class="card confidence-section">
+                    <h3>📊 Confidence Scores</h3>
+                    <div class="confidence-content" id="confidenceContent">
+                        <p class="placeholder">Confidence scores will appear here...</p>
+                    </div>
+                </div>
+                
+                <!-- Stats Section -->
+                <div class="card stats-section">
+                    <h3>📈 Database Stats</h3>
+                    <div class="stats-content" id="statsContent">
+                        <button onclick="loadStats()" class="stats-button">Load Statistics</button>
+                        <div id="statsDetails"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Actions Section -->
+            <div class="card actions-section">
+                <h3>⚙️ Actions</h3>
+                <div class="action-buttons">
+                    <button onclick="clearDatabase()" class="danger-button">Clear Database</button>
+                    <button onclick="loadStats()" class="secondary-button">Refresh Stats</button>
+                </div>
+                <div class="action-status" id="actionStatus"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>

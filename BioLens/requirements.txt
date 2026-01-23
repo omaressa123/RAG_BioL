@@ -1,0 +1,6 @@
+flask
+google-cloud-vision
+python-multipart
+torch
+transformers
+pillow

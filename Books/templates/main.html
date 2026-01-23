@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BioLens RAG</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='stylee.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="parent">
+
+  <!-- Upload Book -->
+  <div class="div1 card">
+    <h2>📘 Upload Biology Book</h2>
+
+    <div class="upload-area" id="uploadArea">
+      <input type="file" id="fileInput" accept=".pdf" style="display: none;">
+      <div class="upload-content">
+        <div class="upload-icon">📁</div>
+        <p>Drop PDF here or click to browse</p>
+        <small>Maximum file size: 50MB</small>
+      </div>
+    </div>
+    
+    <button id="processBtn" class="process-btn" disabled>Process Book</button>
+
+    <div class="progress-box" id="progressBox" style="display: none;">
+      <span id="progressText">Processing: 0%</span>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <div class="book-meta" id="bookMeta" style="display: none;">
+      <p>Pages processed: <b id="pagesProcessed">0 / 0</b></p>
+      <p>Status: <span class="status" id="processingStatus">Ready</span></p>
+    </div>
+  </div>
+
+  <!-- Chat -->
+  <div class="div2 card">
+    <h2>💬 Ask the Book</h2>
+
+    <div class="chat-container">
+      <div class="chat-history" id="chatHistory"></div>
+      
+      <div class="input-area">
+        <textarea id="queryInput" placeholder="Ask a question about the book..." rows="3"></textarea>
+        <button id="askBtn" class="ask-btn">Ask</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="chat">Chat</button>
+        <button class="tab" data-tab="history">History</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Answer -->
+  <div class="div3 card">
+    <h2>🧠 AI Answer</h2>
+
+    <div class="answer-container">
+      <div id="answerText" class="answer">
+        Ask a question to get started...
+      </div>
+
+      <div class="confidence" id="confidenceSection" style="display: none;">
+        Confidence:
+        <span class="confidence-badge" id="confidenceBadge">Medium (75%)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- References -->
+  <div class="div4 card">
+    <h2>📚 References</h2>
+
+    <div id="referencesContainer" class="references-container">
+      <p class="no-references">No references available yet</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+class BioLensApp {
+  constructor() {
+    this.initializeElements();
+    this.bindEvents();
+    this.startStatusPolling();
+  }
+
+  initializeElements() {
+    this.uploadArea = document.getElementById('uploadArea');
+    this.fileInput = document.getElementById('fileInput');
+    this.processBtn = document.getElementById('processBtn');
+    this.progressBox = document.getElementById('progressBox');
+    this.progressFill = document.getElementById('progressFill');
+    this.progressText = document.getElementById('progressText');
+    this.bookMeta = document.getElementById('bookMeta');
+    this.pagesProcessed = document.getElementById('pagesProcessed');
+    this.processingStatus = document.getElementById('processingStatus');
+    this.queryInput = document.getElementById('queryInput');
+    this.askBtn = document.getElementById('askBtn');
+    this.chatHistory = document.getElementById('chatHistory');
+    this.answerText = document.getElementById('answerText');
+    this.confidenceSection = document.getElementById('confidenceSection');
+    this.confidenceBadge = document.getElementById('confidenceBadge');
+    this.referencesContainer = document.getElementById('referencesContainer');
+  }
+
+  bindEvents() {
+    // Upload events
+    this.uploadArea.addEventListener('click', () => this.fileInput.click());
+    this.uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+    this.uploadArea.addEventListener('drop', this.handleDrop.bind(this));
+    this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+    this.processBtn.addEventListener('click', this.processFile.bind(this));
+
+    // Chat events
+    this.askBtn.addEventListener('click', this.askQuestion.bind(this));
+    this.queryInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.askQuestion();
+      }
+    });
+
+    // Tab events
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+    });
+  }
+
+  handleDragOver(e) {
+    e.preventDefault();
+    this.uploadArea.classList.add('dragover');
+  }
+
+  handleDrop(e) {
+    e.preventDefault();
+    this.uploadArea.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      this.handleFile(files[0]);
+    }
+  }
+
+  handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) {
+      this.handleFile(file);
+    }
+  }
+
+  handleFile(file) {
+    if (!file.type === 'application/pdf') {
+      this.showMessage('Please select a PDF file', 'error');
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      this.showMessage('File size exceeds 50MB limit', 'error');
+      return;
+    }
+
+    this.selectedFile = file;
+    this.processBtn.disabled = false;
+    this.uploadArea.innerHTML = `
+      <div class="upload-content">
+        <div class="upload-icon">📄</div>
+        <p><strong>${file.name}</strong></p>
+        <small>${this.formatFileSize(file.size)}</small>
+      </div>
+    `;
+  }
+
+  async processFile() {
+    if (!this.selectedFile) return;
+
+    const formData = new FormData();
+    formData.append('file', this.selectedFile);
+
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      this.progressBox.style.display = 'block';
+      this.bookMeta.style.display = 'block';
+      this.processBtn.disabled = true;
+
+    } catch (error) {
+      this.showMessage('Error uploading file: ' + error.message, 'error');
+    }
+  }
+
+  async askQuestion() {
+    const query = this.queryInput.value.trim();
+    if (!query) return;
+
+    this.askBtn.disabled = true;
+    this.answerText.textContent = 'Thinking...';
+    this.confidenceSection.style.display = 'none';
+    this.referencesContainer.innerHTML = '<p class="no-references">Searching...</p>';
+
+    // Add to chat history
+    this.addToChatHistory(query, 'user');
+
+    try {
+      const response = await fetch('/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query })
+      });
+
+      if (!response.ok) throw new Error('Query failed');
+
+      const data = await response.json();
+      
+      this.displayAnswer(data);
+      this.addToChatHistory(query, 'assistant', data.answer);
+
+    } catch (error) {
+      this.answerText.textContent = 'Error: ' + error.message;
+    } finally {
+      this.askBtn.disabled = false;
+      this.queryInput.value = '';
+    }
+  }
+
+  displayAnswer(data) {
+    this.answerText.textContent = data.answer;
+    
+    // Update confidence
+    this.confidenceSection.style.display = 'block';
+    this.confidenceBadge.textContent = `${data.confidence}%`;
+    this.confidenceBadge.className = `confidence-badge ${this.getConfidenceClass(data.confidence)}`;
+
+    // Display references
+    if (data.references && data.references.length > 0) {
+      this.referencesContainer.innerHTML = data.references.map(ref => `
+        <div class="reference">
+          <span class="source">${ref.source}</span>
+          <span class="page">Chunk ${ref.chunk_id}</span>
+          <p class="highlight">${ref.snippet}</p>
+        </div>
+      `).join('');
+    } else {
+      this.referencesContainer.innerHTML = '<p class="no-references">No references found</p>';
+    }
+  }
+
+  addToChatHistory(query, type, answer = '') {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${type}`;
+    
+    if (type === 'user') {
+      messageDiv.innerHTML = `<strong>You:</strong> ${query}`;
+    } else {
+      messageDiv.innerHTML = `<strong>AI:</strong> ${answer}`;
+    }
+    
+    this.chatHistory.appendChild(messageDiv);
+    this.chatHistory.scrollTop = this.chatHistory.scrollHeight;
+  }
+
+  async startStatusPolling() {
+    setInterval(async () => {
+      try {
+        const response = await fetch('/api/status');
+        const status = await response.json();
+        
+        if (status.is_processing) {
+          this.updateProgress(status);
+        }
+      } catch (error) {
+        console.log('Status polling error:', error);
+      }
+    }, 1000);
+  }
+
+  updateProgress(status) {
+    this.progressFill.style.width = `${status.progress}%`;
+    this.progressText.textContent = `Processing: ${status.progress}%`;
+    this.pagesProcessed.textContent = `${status.pages_processed} / ${status.total_pages}`;
+    this.processingStatus.textContent = status.current_step;
+
+    if (status.progress === 100) {
+      setTimeout(() => {
+        this.progressBox.style.display = 'none';
+        this.showMessage('Book processed successfully!', 'success');
+      }, 2000);
+    }
+  }
+
+  switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  }
+
+  getConfidenceClass(confidence) {
+    if (confidence >= 80) return 'high';
+    if (confidence >= 60) return 'medium';
+    return 'low';
+  }
+
+  formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  showMessage(message, type) {
+    // Simple message display - could be enhanced with toast notifications
+    console.log(`${type}: ${message}`);
+  }
+}
+
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  new BioLensApp();
+});
+</script>
+
+</body>
+</html>
